@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LCL - Mon Compte</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="Lcl_logo.svg.png">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        @keyframes bounce-in {
+            0% { transform: translate(-50%, -100%); opacity: 0; }
+            70% { transform: translate(-50%, 20px); opacity: 1; }
+            100% { transform: translate(-50%, 0); opacity: 1; }
+        }
+        .animate-push { animation: bounce-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
+        /* Texture réaliste de la carte Gold */
+        .gold-card {
+            background: linear-gradient(135deg, #BF953F 0%, #FCF6BA 45%, #B38728 70%, #FBF5B7 85%, #AA8B24 100%);
+            border: 1px solid #D4AF37;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .gold-card::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.3), transparent);
+            transform: rotate(30deg);
+            pointer-events: none;
+        }
+
+        .card-chip {
+            width: 50px;
+            height: 38px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #e2e2e2 0%, #999999 100%);
+            position: relative;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .card-chip::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .card-chip::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+    <div id="app">
+        <!-- L'application sera injectée ici par le script -->
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+
+        // CONFIGURATION
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'lcl-fictif-web';
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // ÉTAT DES DONNÉES
+        let state = {
+            isAuthenticated: false,
+            user: null,
+            balance: 2000400,
+            isBalanceVisible: true,
+            transactions: [
+                { id: '1', label: 'BANQUE BNI', amount: 1000900, date: '28/12/2025', type: 'credit', status: 'completed' },
+                { id: '2', label: 'Jean Rambaud', amount: -15000, date: '29/12/2025', type: 'debit', status: 'pending', iban: 'FRXXXXXXXXX' }
+            ],
+            notifications: [],
+            activeTab: 'courant'
+        };
+
+        // RENDU ET HELPERS
+        const render = () => {
+            const root = document.getElementById('app');
+            if (!state.isAuthenticated) {
+                root.innerHTML = loginPage();
+            } else {
+                root.innerHTML = dashboardPage();
+            }
+            lucide.createIcons();
+        };
+
+        // COMPOSANTS UI
+        const loginPage = () => `
+            <div class="min-h-screen bg-[#00205B] flex flex-col items-center justify-center p-4">
+                <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl p-10">
+                    <h1 class="text-7xl font-black text-[#FFD700] text-center mb-10 italic tracking-tighter">LCL</h1>
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-400 uppercase mb-2 ml-1">Identifiant</label>
+                            <input type="password" id="loginId" class="w-full px-5 py-4 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-[#00205B] outline-none transition-all text-lg" placeholder="••••••••••">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-400 uppercase mb-2 ml-1">Mot de passe</label>
+                            <input type="password" id="loginPass" class="w-full px-5 py-4 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-[#00205B] outline-none transition-all text-lg" placeholder="••••••">
+                        </div>
+                        <p id="loginError" class="text-red-500 text-sm text-center hidden">Identifiants incorrects</p>
+                        <button onclick="handleLogin()" class="w-full bg-[#00205B] text-white py-5 rounded-2xl font-black text-lg hover:bg-[#001540] shadow-xl transition-all active:scale-95">
+                            Accéder à mes comptes
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const dashboardPage = () => `
+            <div class="flex flex-col min-h-screen bg-white relative">
+                <!-- En-tête bleu -->
+                <div class="bg-[#00205B] text-white pt-14 pb-10 px-6 rounded-b-[45px] shadow-2xl z-10">
+                    <div class="flex justify-between items-center mb-10">
+                        <div>
+                            <h1 class="text-3xl font-black italic text-[#FFD700] tracking-tighter">LCL</h1>
+                            <p class="text-sm opacity-60 mt-1 font-medium">Bonjour, Chantal Labour</p>
+                        </div>
+                        <button onclick="logout()" class="p-3 bg-white/10 rounded-full hover:bg-white/20 transition-all">
+                            <i data-lucide="log-out" class="w-6 h-6"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex gap-4 overflow-x-auto pb-4 mb-10 no-scrollbar">
+                        ${[
+                            { id: 'courant', label: 'Courant' },
+                            { id: 'epargne', label: 'Épargne' },
+                            { id: 'credit', label: 'Crédit' },
+                            { id: 'assurance', label: 'Assurance' }
+                        ].map(t => `
+                            <button onclick="setTab('${t.id}')" class="whitespace-nowrap px-6 py-2.5 rounded-full text-sm font-bold transition-all ${state.activeTab === t.id ? 'bg-white text-[#00205B]' : 'bg-white/10 text-white hover:bg-white/20'}">
+                                ${t.label}
+                            </button>
+                        `).join('')}
+                    </div>
+
+                    <div class="text-center">
+                        <div class="flex items-center justify-center gap-2 mb-2 opacity-60 uppercase text-[10px] font-black tracking-[0.2em]">
+                            <span>${state.activeTab === 'courant' ? 'Solde disponible' : state.activeTab === 'epargne' ? 'Épargne totale' : state.activeTab === 'credit' ? 'Encours total' : 'Mes contrats'}</span>
+                            <button onclick="toggleBalance()">${state.isBalanceVisible ? '<i data-lucide="eye-off" class="w-4 h-4"></i>' : '<i data-lucide="eye" class="w-4 h-4"></i>'}</button>
+                        </div>
+                        <div class="text-5xl font-black mb-6 tracking-tight">
+                            ${state.isBalanceVisible ? 
+                                (state.activeTab === 'courant' ? state.balance.toLocaleString('fr-FR') + ' €' : 
+                                 state.activeTab === 'epargne' ? "443 200 €" : 
+                                 state.activeTab === 'credit' ? "362 000 €" : "3 actifs")
+                                : '••••••'}
+                        </div>
+                        <div class="flex items-center justify-center gap-2 text-xs opacity-50 font-medium">
+                            <i data-lucide="clock" class="w-4 h-4"></i>
+                            <span>${new Date().toLocaleDateString('fr-FR')} - ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contenu blanc -->
+                <div class="flex-1 px-6 pt-10 pb-32">
+                    ${state.activeTab === 'courant' ? `
+                        <div class="flex justify-between items-center mb-8">
+                            <h2 class="text-2xl font-black text-[#00205B]">Opérations</h2>
+                            <button class="text-[#00205B] font-bold text-sm">Tout voir</button>
+                        </div>
+                        <div class="space-y-8">
+                            ${state.transactions.map(tx => `
+                                <div class="flex justify-between items-start">
+                                    <div class="flex gap-5">
+                                        <div class="p-4 rounded-[22px] ${tx.amount > 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'} shadow-sm">
+                                            <i data-lucide="arrow-right-left"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-gray-900 text-lg">${tx.label}</h3>
+                                            ${tx.iban ? `<p class="text-[10px] text-gray-400 font-mono mt-1">${tx.iban}</p>` : ''}
+                                            <p class="text-xs text-gray-400 mt-1 font-semibold">${tx.date}</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        ${tx.status === 'pending' ? '<span class="block text-[10px] font-black text-red-500 uppercase tracking-tighter mb-1 animate-pulse">En Attente</span>' : ''}
+                                        <span class="text-xl font-black ${tx.amount > 0 ? 'text-green-600' : 'text-gray-900'}">
+                                            ${tx.amount > 0 ? '+' : ''}${tx.amount.toLocaleString('fr-FR')} €
+                                        </span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : state.activeTab === 'epargne' ? `
+                        <h2 class="text-2xl font-black text-[#00205B] mb-8">Mes livrets</h2>
+                        <div class="space-y-4">
+                            <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex justify-between items-center">
+                                <div>
+                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Livret A</p>
+                                    <h3 class="text-lg font-black text-[#00205B]">Épargne Précaution</h3>
+                                </div>
+                                <p class="text-xl font-black text-[#00205B]">55 000,00 €</p>
+                            </div>
+                            <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex justify-between items-center">
+                                <div>
+                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">PEL</p>
+                                    <h3 class="text-lg font-black text-[#00205B]">Projet Immobilier</h3>
+                                </div>
+                                <p class="text-xl font-black text-[#00205B]">388 200,00 €</p>
+                            </div>
+                        </div>
+                    ` : state.activeTab === 'credit' ? `
+                        <h2 class="text-2xl font-black text-[#00205B] mb-8">Mes crédits</h2>
+                        <div class="space-y-4">
+                            <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex justify-between items-center">
+                                <div>
+                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Prêt Immo</p>
+                                    <h3 class="text-lg font-black text-[#00205B]">Résidence Principale</h3>
+                                </div>
+                                <p class="text-xl font-black text-red-600">- 350 000,00 €</p>
+                            </div>
+                            <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex justify-between items-center">
+                                <div>
+                                    <p class="text-xs font-bold text-gray-400 uppercase tracking-widest">Prêt Conso</p>
+                                    <h3 class="text-lg font-black text-[#00205B]">Crédit Auto</h3>
+                                </div>
+                                <p class="text-xl font-black text-red-600">- 12 000,00 €</p>
+                            </div>
+                        </div>
+                    ` : `
+                        <h2 class="text-2xl font-black text-[#00205B] mb-8">Mes contrats</h2>
+                        <div class="space-y-4">
+                            <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
+                                <div class="bg-blue-50 p-3 rounded-2xl text-[#00205B]"><i data-lucide="shield-check"></i></div>
+                                <div>
+                                    <h3 class="text-lg font-black text-[#00205B]">Habitation Formule Intégrale</h3>
+                                    <p class="text-xs font-bold text-green-600 uppercase">Actif</p>
+                                </div>
+                            </div>
+                            <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
+                                <div class="bg-blue-50 p-3 rounded-2xl text-[#00205B]"><i data-lucide="shield-check"></i></div>
+                                <div>
+                                    <h3 class="text-lg font-black text-[#00205B]">Assurance Auto Visa Gold</h3>
+                                    <p class="text-xs font-bold text-green-600 uppercase">Actif</p>
+                                </div>
+                            </div>
+                            <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
+                                <div class="bg-blue-50 p-3 rounded-2xl text-[#00205B]"><i data-lucide="shield-check"></i></div>
+                                <div>
+                                    <h3 class="text-lg font-black text-[#00205B]">Complémentaire Santé Premium</h3>
+                                    <p class="text-xs font-bold text-green-600 uppercase">Actif</p>
+                                </div>
+                            </div>
+                        </div>
+                    `}
+                </div>
+
+                <!-- Barre de navigation basse -->
+                <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 px-8 py-5 z-20">
+                    <div class="flex justify-around items-center max-w-md mx-auto">
+                        <button onclick="openVirement()" class="flex flex-col items-center gap-1.5">
+                            <div class="p-3.5 bg-[#00205B]/5 rounded-2xl text-[#00205B]"><i data-lucide="arrow-right-left"></i></div>
+                            <span class="text-[10px] font-black text-[#00205B] uppercase tracking-tighter">Virement</span>
+                        </button>
+                        <button onclick="openCard()" class="flex flex-col items-center gap-1.5">
+                            <div class="p-3.5 rounded-2xl text-gray-400"><i data-lucide="credit-card"></i></div>
+                            <span class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Carte</span>
+                        </button>
+                        <button onclick="openNotifs()" class="flex flex-col items-center gap-1.5 relative">
+                            <div class="p-3.5 rounded-2xl text-gray-400">
+                                <i data-lucide="bell"></i>
+                                ${state.notifications.length > 0 ? '<span class="absolute top-3 right-3 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>' : ''}
+                            </div>
+                            <span class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Notifications</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Overlays -->
+                <div id="overlay-container"></div>
+            </div>
+        `;
+
+        const virementModal = () => `
+            <div class="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+                <div class="bg-white w-full max-w-lg rounded-t-[45px] sm:rounded-[45px] p-10 shadow-2xl">
+                    <div class="flex justify-between items-center mb-10">
+                        <h2 class="text-3xl font-black text-[#00205B]">Nouveau virement</h2>
+                        <button onclick="closeOverlay()" class="bg-gray-100 p-2.5 rounded-full">✕</button>
+                    </div>
+                    <form onsubmit="handleTransfer(event)" class="space-y-5">
+                        <div class="grid gap-5">
+                            <div>
+                                <label class="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Bénéficiaire</label>
+                                <input required name="recipient" class="w-full bg-gray-50 rounded-2xl p-5 mt-1 outline-none focus:ring-2 focus:ring-[#00205B]" placeholder="Nom du titulaire">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">IBAN</label>
+                                <input required name="iban" class="w-full bg-gray-50 rounded-2xl p-5 mt-1 outline-none font-mono" placeholder="FR76 3000...">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Banque de destination</label>
+                                <input required name="bank" class="w-full bg-gray-50 rounded-2xl p-5 mt-1 outline-none" placeholder="Ex: BNP Paribas, BoursoBank...">
+                            </div>
+                            <div class="grid grid-cols-2 gap-5">
+                                <div>
+                                    <label class="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">BIC</label>
+                                    <input required class="w-full bg-gray-50 rounded-2xl p-5 mt-1 outline-none font-mono" placeholder="LCLAFRPP">
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-black text-gray-400 uppercase ml-2 tracking-widest">Montant (€)</label>
+                                    <input required name="amount" type="number" step="0.01" class="w-full bg-gray-50 rounded-2xl p-5 mt-1 outline-none font-black text-xl" placeholder="0.00">
+                                </div>
+                            </div>
+                        </div>
+                        <button id="transferBtn" type="submit" class="w-full bg-[#00205B] text-white py-6 rounded-2xl font-black text-xl hover:bg-[#001540] shadow-xl transition-all mt-6">
+                            Confirmer l'émission
+                        </button>
+                    </form>
+                </div>
+            </div>
+        `;
+
+        const cardModal = () => `
+            <div class="fixed inset-0 bg-[#00205B]/95 backdrop-blur-xl z-[110] flex flex-col items-center justify-center p-8">
+                <button onclick="closeOverlay()" class="absolute top-12 right-12 text-white text-4xl">✕</button>
+                
+                <div class="w-full max-w-sm aspect-[1.58/1] rounded-[22px] p-8 relative overflow-hidden gold-card">
+                    <div class="flex justify-between items-start relative z-10 mb-8">
+                        <span class="text-3xl font-black text-[#00205B] italic tracking-tighter">LCL</span>
+                        <i data-lucide="wifi" class="text-[#00205B]/40 rotate-90 w-8 h-8"></i>
+                    </div>
+                    
+                    <div class="card-chip mb-8"></div>
+                    
+                    <p class="text-2xl font-mono text-[#00205B] tracking-[0.1em] mb-1 font-black shadow-sm flex gap-4">
+                        <span>4500</span> <span>8271</span> <span>9902</span> <span class="opacity-60">••••</span>
+                    </p>
+
+                    <!-- Nom du titulaire placé juste en dessous du numéro -->
+                    <p class="text-xl text-[#00205B] font-black uppercase tracking-tight mb-8">Chantal Labour</p>
+                    
+                    <div class="flex justify-end items-end relative z-10">
+                        <div class="text-right">
+                            <p class="text-[8px] text-[#00205B]/60 uppercase font-black tracking-widest mb-1">Expire fin</p>
+                            <p class="text-lg text-[#00205B] font-black tracking-tighter leading-none">12/28</p>
+                        </div>
+                    </div>
+                    
+                    <div class="absolute bottom-6 right-6 opacity-90">
+                        <span class="text-[#00205B] font-black italic text-2xl drop-shadow-sm">VISA <span class="font-light not-italic text-xl">Gold</span></span>
+                    </div>
+                </div>
+
+                <div class="mt-16 text-center text-white/90 space-y-6">
+                    <p class="text-3xl font-black text-[#FFD700] tracking-tight">Visa Gold Premier</p>
+                    <p class="text-sm bg-white/10 py-2 px-6 rounded-full inline-block font-bold">Plafond mensuel : 15 000 €</p>
+                    <div class="flex gap-4 justify-center">
+                        <button class="px-10 py-4 bg-white/10 rounded-2xl border border-white/20 font-black">Bloquer</button>
+                        <button class="px-10 py-4 bg-white text-[#00205B] rounded-2xl font-black shadow-2xl">Voir code</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const notificationModal = () => `
+            <div class="fixed inset-0 bg-white z-[150] flex flex-col">
+                <div class="pt-14 pb-6 px-8 border-b border-gray-100 flex justify-between items-center">
+                    <h2 class="text-3xl font-black text-[#00205B]">Centre d'alertes</h2>
+                    <button onclick="closeOverlay()" class="text-[#00205B] font-bold">Fermer</button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-8 space-y-6">
+                    ${state.notifications.length === 0 ? `
+                        <div class="py-20 text-center opacity-20">
+                            <i data-lucide="bell-off" class="w-16 h-16 mx-auto mb-4"></i>
+                            <p class="text-xl font-bold">Aucune alerte</p>
+                        </div>
+                    ` : state.notifications.map(n => `
+                        <div class="bg-gray-50 p-6 rounded-[35px] border-l-4 border-[#00205B] shadow-sm">
+                            <div class="flex justify-between items-start mb-3">
+                                <h3 class="font-black text-[#00205B] text-lg uppercase tracking-tight">${n.title}</h3>
+                                <span class="text-[10px] text-gray-400 font-bold uppercase">${n.date}</span>
+                            </div>
+                            <p class="text-gray-700 leading-relaxed text-base">${n.message}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+
+        const pushNotification = (msg) => `
+            <div id="push-notif" class="fixed top-6 left-1/2 transform -translate-x-1/2 z-[200] w-[92%] max-w-sm animate-push">
+                <div class="bg-white/95 backdrop-blur-xl rounded-[32px] p-5 shadow-2xl border border-gray-100 flex items-start gap-4">
+                    <div class="bg-blue-600 p-2.5 rounded-xl text-white">
+                        <i data-lucide="info" class="w-6 h-6"></i>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-black text-[#00205B] text-sm">LCL - ALERTE</span>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase">Maintenant</span>
+                        </div>
+                        <p class="text-xs text-gray-700 leading-relaxed font-medium">${msg}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // LOGIQUE APP
+        window.handleLogin = () => {
+            const id = document.getElementById('loginId').value;
+            const pass = document.getElementById('loginPass').value;
+            if (id === '0747097201' && pass === '456123') {
+                state.isAuthenticated = true;
+                render();
+            } else {
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        };
+
+        window.logout = () => {
+            state.isAuthenticated = false;
+            render();
+        };
+
+        window.toggleBalance = () => {
+            state.isBalanceVisible = !state.isBalanceVisible;
+            render();
+        };
+
+        window.setTab = (tab) => {
+            state.activeTab = tab;
+            render();
+        };
+
+        window.closeOverlay = () => {
+            document.getElementById('overlay-container').innerHTML = '';
+        };
+
+        window.openVirement = () => {
+            document.getElementById('overlay-container').innerHTML = virementModal();
+            lucide.createIcons();
+        };
+
+        window.openCard = () => {
+            document.getElementById('overlay-container').innerHTML = cardModal();
+            lucide.createIcons();
+        };
+
+        window.openNotifs = () => {
+            document.getElementById('overlay-container').innerHTML = notificationModal();
+            lucide.createIcons();
+        };
+
+        window.handleTransfer = (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('transferBtn');
+            const form = e.target;
+            const recipient = form.recipient.value;
+            const amount = parseFloat(form.amount.value);
+            
+            btn.disabled = true;
+            btn.innerHTML = 'Traitement sécurisé en cours...';
+            
+            setTimeout(() => {
+                closeOverlay();
+                const msg = "Pour un contrôle de conformité les fonds de ce compte ont été gelés en attendant la justification des fonds. Veuillez contacter votre gestionnaire pour plus d'information.";
+                
+                // Afficher la notification Push
+                const div = document.createElement('div');
+                div.innerHTML = pushNotification(msg);
+                document.body.appendChild(div);
+                lucide.createIcons();
+
+                // Ajouter aux transactions et notifs
+                const newTx = {
+                    id: Date.now().toString(),
+                    label: recipient,
+                    amount: -amount,
+                    date: new Date().toLocaleDateString('fr-FR'),
+                    type: 'debit',
+                    status: 'pending'
+                };
+                
+                state.transactions = [newTx, ...state.transactions];
+                state.notifications = [{ title: "Contrôle de conformité", message: msg, date: new Date().toLocaleDateString('fr-FR') + " " + new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'}) }, ...state.notifications];
+                
+                syncData();
+                render();
+
+                setTimeout(() => div.remove(), 8000);
+            }, 5000);
+        };
+
+        const syncData = async () => {
+            if (!state.user) return;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', state.user.uid, 'data', 'account');
+                await setDoc(docRef, {
+                    balance: state.balance,
+                    transactions: state.transactions,
+                    notifications: state.notifications
+                });
+            } catch (err) { console.error(err); }
+        };
+
+        // INITIALISATION
+        onAuthStateChanged(auth, (u) => {
+            if (u) {
+                state.user = u;
+                const docRef = doc(db, 'artifacts', appId, 'users', u.uid, 'data', 'account');
+                onSnapshot(docRef, (snap) => {
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        state.balance = data.balance || state.balance;
+                        state.transactions = data.transactions || state.transactions;
+                        state.notifications = data.notifications || state.notifications;
+                        render();
+                    }
+                });
+            } else {
+                signInAnonymously(auth);
+            }
+        });
+
+        render();
+    </script>
+</body>
+</html>
