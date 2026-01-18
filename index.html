@@ -25,7 +25,6 @@
         }
         .animate-push { animation: bounce-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         
-        /* Texture de la carte Visa Gold/Premier */
         .gold-card {
             background: linear-gradient(135deg, #BF953F 0%, #FCF6BA 45%, #B38728 70%, #FBF5B7 85%, #AA8B24 100%);
             border: 1px solid #D4AF37;
@@ -55,7 +54,6 @@
             border: 1px solid rgba(0,0,0,0.1);
         }
 
-        /* Effet réaliste embossé pour le nom */
         .embossed-text {
             font-family: 'Courier New', Courier, monospace;
             text-shadow: 1px 1px 0px rgba(255,255,255,0.4), -1px -1px 0px rgba(0,0,0,0.2);
@@ -67,7 +65,7 @@
 <body class="bg-gray-100 min-h-screen">
 
     <div id="app">
-        <!-- Chargement initial -->
+        <!-- Spinner affiché brièvement avant le rendu -->
         <div class="flex items-center justify-center min-h-screen">
             <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00205B]"></div>
         </div>
@@ -78,16 +76,7 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
 
-        // CONFIGURATION SÉCURISÉE
-        let firebaseConfig = {};
-        try { firebaseConfig = JSON.parse(__firebase_config); } catch (e) { }
-
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'lcl-fictif-web';
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        // ÉTAT DES DONNÉES
+        // CONFIGURATION ET ÉTAT
         let state = {
             isAuthenticated: false,
             user: null,
@@ -106,14 +95,20 @@
 
         const render = () => {
             const root = document.getElementById('app');
+            if (!root) return;
+            
             if (!state.isAuthenticated) {
                 root.innerHTML = loginPage();
             } else {
                 root.innerHTML = dashboardPage();
             }
-            lucide.createIcons();
+            
+            if (window.lucide) {
+                lucide.createIcons();
+            }
         };
 
+        // UI COMPONENTS
         const loginPage = () => `
             <div class="min-h-screen bg-[#00205B] flex flex-col items-center justify-center p-4">
                 <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl p-10">
@@ -148,20 +143,13 @@
                             <i data-lucide="log-out" class="w-6 h-6"></i>
                         </button>
                     </div>
-
                     <div class="flex gap-4 overflow-x-auto pb-4 mb-10 no-scrollbar">
-                        ${[
-                            { id: 'courant', label: 'Courant' },
-                            { id: 'epargne', label: 'Épargne' },
-                            { id: 'credit', label: 'Crédit' },
-                            { id: 'assurance', label: 'Assurance' }
-                        ].map(t => `
-                            <button onclick="setTab('${t.id}')" class="whitespace-nowrap px-6 py-2.5 rounded-full text-sm font-bold transition-all ${state.activeTab === t.id ? 'bg-white text-[#00205B]' : 'bg-white/10 text-white hover:bg-white/20'}">
-                                ${t.label}
+                        ${['courant', 'epargne', 'credit', 'assurance'].map(id => `
+                            <button onclick="setTab('${id}')" class="whitespace-nowrap px-6 py-2.5 rounded-full text-sm font-bold transition-all ${state.activeTab === id ? 'bg-white text-[#00205B]' : 'bg-white/10 text-white hover:bg-white/20'}">
+                                ${id.charAt(0).toUpperCase() + id.slice(1)}
                             </button>
                         `).join('')}
                     </div>
-
                     <div class="text-center">
                         <div class="flex items-center justify-center gap-2 mb-2 opacity-60 uppercase text-[10px] font-black tracking-[0.2em]">
                             <span>${state.activeTab === 'courant' ? 'Solde disponible' : state.activeTab === 'epargne' ? 'Épargne totale' : state.activeTab === 'credit' ? 'Encours total' : 'Mes contrats'}</span>
@@ -170,14 +158,11 @@
                         <div class="text-5xl font-black mb-6 tracking-tight">
                             ${state.isBalanceVisible ? 
                                 (state.activeTab === 'courant' ? state.balance.toLocaleString('fr-FR') + ' €' : 
-                                 state.activeTab === 'epargne' ? "520 000 €" : 
-                                 state.activeTab === 'credit' ? "215 400 €" : "3 actifs")
+                                 state.activeTab === 'epargne' ? "520 000,00 €" : 
+                                 state.activeTab === 'credit' ? "215 400,00 €" : "3 actifs")
                                 : '••••••'}
                         </div>
-                        <div class="flex items-center justify-center gap-2 text-xs opacity-50 font-medium">
-                            <i data-lucide="clock" class="w-4 h-4"></i>
-                            <span>${new Date().toLocaleDateString('fr-FR')}</span>
-                        </div>
+                        <p class="text-[10px] opacity-40 font-bold uppercase tracking-widest">${new Date().toLocaleDateString('fr-FR')}</p>
                     </div>
                 </div>
 
@@ -234,36 +219,32 @@
                         <div class="space-y-4">
                             <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
                                 <div class="bg-blue-50 p-3 rounded-2xl text-[#00205B]"><i data-lucide="shield-check"></i></div>
-                                <div><h3 class="text-lg font-black text-[#00205B]">Assurance Habitation</h3><p class="text-xs font-bold text-green-600 uppercase">Actif - Formule Intégrale</p></div>
+                                <div><h3 class="text-lg font-black text-[#00205B]">Assurance Habitation</h3><p class="text-xs font-bold text-green-600 uppercase tracking-tighter">Formule Intégrale</p></div>
                             </div>
                             <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
                                 <div class="bg-blue-50 p-3 rounded-2xl text-[#00205B]"><i data-lucide="shield-check"></i></div>
-                                <div><h3 class="text-lg font-black text-[#00205B]">Assurance Auto</h3><p class="text-xs font-bold text-green-600 uppercase">Actif - Protection Visa</p></div>
-                            </div>
-                            <div class="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4">
-                                <div class="bg-blue-50 p-3 rounded-2xl text-[#00205B]"><i data-lucide="shield-check"></i></div>
-                                <div><h3 class="text-lg font-black text-[#00205B]">Protection Santé</h3><p class="text-xs font-bold text-green-600 uppercase">Actif - Mutuelle Premium</p></div>
+                                <div><h3 class="text-lg font-black text-[#00205B]">Assurance Auto</h3><p class="text-xs font-bold text-green-600 uppercase tracking-tighter">Protection Visa</p></div>
                             </div>
                         </div>
                     `}
                 </div>
 
-                <div class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-100 px-8 py-5 z-20">
+                <div class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 px-8 py-5 z-20">
                     <div class="flex justify-around items-center max-w-md mx-auto">
                         <button onclick="openVirement()" class="flex flex-col items-center gap-1.5">
                             <div class="p-3.5 bg-[#00205B]/5 rounded-2xl text-[#00205B]"><i data-lucide="arrow-right-left"></i></div>
-                            <span class="text-[10px] font-black text-[#00205B] uppercase tracking-tighter">Virement</span>
+                            <span class="text-[10px] font-black text-[#00205B] uppercase">Virement</span>
                         </button>
                         <button onclick="openCard()" class="flex flex-col items-center gap-1.5">
                             <div class="p-3.5 rounded-2xl text-gray-400"><i data-lucide="credit-card"></i></div>
-                            <span class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Carte</span>
+                            <span class="text-[10px] font-black text-gray-400 uppercase">Carte</span>
                         </button>
                         <button onclick="openNotifs()" class="flex flex-col items-center gap-1.5 relative">
                             <div class="p-3.5 rounded-2xl text-gray-400">
                                 <i data-lucide="bell"></i>
-                                ${state.notifications.length > 0 ? '<span class="absolute top-3 right-3 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>' : ''}
+                                ${state.notifications.length > 0 ? '<span class="absolute top-3 right-3 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>' : ''}
                             </div>
-                            <span class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Alertes</span>
+                            <span class="text-[10px] font-black text-gray-400 uppercase">Alertes</span>
                         </button>
                     </div>
                 </div>
@@ -273,7 +254,7 @@
 
         const virementModal = () => `
             <div class="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
-                <div class="bg-white w-full max-w-lg rounded-t-[45px] sm:rounded-[45px] p-10">
+                <div class="bg-white w-full max-w-lg rounded-t-[45px] sm:rounded-[45px] p-10 shadow-2xl">
                     <div class="flex justify-between items-center mb-10">
                         <h2 class="text-3xl font-black text-[#00205B]">Virement</h2>
                         <button onclick="closeOverlay()" class="bg-gray-100 p-2.5 rounded-full">✕</button>
@@ -297,24 +278,12 @@
                     <button onclick="closeOverlay()" class="text-[#00205B] font-bold">Fermer</button>
                 </div>
                 <div class="flex-1 overflow-y-auto p-8 space-y-6">
-                    ${state.notifications.length === 0 ? '<p class="text-center opacity-20 py-20">Aucune alerte</p>' : state.notifications.map(n => `
+                    ${state.notifications.length === 0 ? '<p class="text-center opacity-20 py-20 font-bold">Aucune alerte</p>' : state.notifications.map(n => `
                         <div class="bg-gray-50 p-6 rounded-[35px] border-l-4 border-[#00205B]">
-                            <h3 class="font-black text-[#00205B] uppercase">${n.title}</h3>
+                            <h3 class="font-black text-[#00205B] uppercase text-xs">${n.title}</h3>
                             <p class="text-gray-700 mt-2 text-sm">${n.message}</p>
                         </div>
                     `).join('')}
-                </div>
-            </div>
-        `;
-
-        const pushNotification = (msg) => `
-            <div id="push-notif" class="fixed top-6 left-1/2 transform -translate-x-1/2 z-[200] w-[92%] max-w-sm animate-push">
-                <div class="bg-white/95 backdrop-blur-xl rounded-[32px] p-5 shadow-2xl border border-gray-100 flex items-start gap-4">
-                    <div class="bg-blue-600 p-2.5 rounded-xl text-white"><i data-lucide="info" class="w-6 h-6"></i></div>
-                    <div class="flex-1">
-                        <span class="font-black text-[#00205B] text-xs">LCL - ALERTE</span>
-                        <p class="text-[11px] text-gray-700 leading-tight mt-1">${msg}</p>
-                    </div>
                 </div>
             </div>
         `;
@@ -350,11 +319,10 @@
             </div>
         `;
 
-        // LOGIQUE GLOBALE
+        // LOGIQUE APP
         window.handleLogin = () => {
             const id = document.getElementById('loginId').value;
             const pass = document.getElementById('loginPass').value;
-            // Identifiants demandés
             if (id === '85213647' && pass === '456123') {
                 state.isAuthenticated = true;
                 render();
@@ -382,58 +350,66 @@
                 closeOverlay();
                 const msg = "Pour un contrôle de conformité les fonds de ce compte ont été gelés en attendant la justification des fonds. Veuillez contacter votre gestionnaire.";
                 
-                const div = document.createElement('div');
-                div.innerHTML = pushNotification(msg);
-                document.body.appendChild(div);
-                lucide.createIcons();
-
                 const newTx = { id: Date.now().toString(), label: form.recipient.value, amount: -parseFloat(form.amount.value), date: new Date().toLocaleDateString('fr-FR'), type: 'debit', status: 'pending' };
                 state.transactions = [newTx, ...state.transactions];
                 state.notifications = [{ title: "CONTRÔLE", message: msg, date: new Date().toLocaleDateString('fr-FR') }, ...state.notifications];
                 
-                syncData();
                 render();
-                setTimeout(() => div.remove(), 8000);
+                // Notification visuelle
+                const div = document.createElement('div');
+                div.innerHTML = `<div class="fixed top-6 left-1/2 transform -translate-x-1/2 z-[200] w-[90%] bg-white p-5 rounded-3xl shadow-2xl border border-gray-100 flex gap-4 animate-push">
+                    <div class="bg-blue-600 p-2 rounded-xl text-white">i</div>
+                    <div class="text-xs text-gray-700">${msg}</div>
+                </div>`;
+                document.body.appendChild(div);
+                setTimeout(() => div.remove(), 6000);
             }, 3000);
         };
 
-        const initAuth = async () => {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (err) { }
-        };
+        // INITIALISATION FIREBASE & MODE DÉMO
+        let db = null;
+        let auth = null;
+        let appId = 'lcl-fictif-web';
 
-        onAuthStateChanged(auth, (user) => {
-            state.user = user;
-            if (user) {
-                const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'account', 'data');
-                onSnapshot(docRef, (snap) => {
-                    if (snap.exists()) {
-                        const data = snap.data();
-                        state.balance = data.balance ?? state.balance;
-                        state.transactions = data.transactions ?? state.transactions;
-                        state.notifications = data.notifications ?? state.notifications;
-                        render();
+        const init = async () => {
+            render(); // Rendu immédiat (Login Page)
+
+            try {
+                if (typeof __firebase_config !== 'undefined') {
+                    const firebaseConfig = JSON.parse(__firebase_config);
+                    appId = typeof __app_id !== 'undefined' ? __app_id : appId;
+                    const app = initializeApp(firebaseConfig);
+                    auth = getAuth(app);
+                    db = getFirestore(app);
+
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
                     }
-                });
-            }
-            render();
-        });
 
-        const syncData = async () => {
-            if (!state.user) return;
-            try {
-                const docRef = doc(db, 'artifacts', appId, 'users', state.user.uid, 'account', 'data');
-                await setDoc(docRef, { balance: state.balance, transactions: state.transactions, notifications: state.notifications }, { merge: true });
-            } catch (err) { }
+                    onAuthStateChanged(auth, (user) => {
+                        if (user) {
+                            state.user = user;
+                            const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'account', 'data');
+                            onSnapshot(docRef, (snap) => {
+                                if (snap.exists()) {
+                                    const data = snap.data();
+                                    state.balance = data.balance ?? state.balance;
+                                    state.transactions = data.transactions ?? state.transactions;
+                                    state.notifications = data.notifications ?? state.notifications;
+                                    render();
+                                }
+                            });
+                        }
+                    });
+                }
+            } catch (e) {
+                console.warn("Mode Démo activé (Firebase absent ou non configuré).");
+            }
         };
 
-        initAuth();
-        render();
+        init();
     </script>
 </body>
 </html>
